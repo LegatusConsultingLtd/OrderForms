@@ -57,6 +57,28 @@
     }
   </style>
 </head>
+<script>
+function sendDrawingToJotForm() {
+    try {
+        const canvas = document.querySelector("canvas");
+        const dataURL = canvas.toDataURL("image/png");
+
+        window.parent.postMessage(
+            {
+                type: "SET_JOTFORM_FIELD",
+                field: "drawingData",
+                value: dataURL
+            },
+            "*"
+        );
+    } catch (e) {
+        console.error("Failed to send drawing data:", e);
+    }
+}
+
+window.addEventListener("beforeunload", sendDrawingToJotForm);
+</script>
+
 <body>
 
 <div id="toolbar">
