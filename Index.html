@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Final Drawing Tool</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.2.4/fabric.min.js"></script>
+  <style>
+    body { font-family:sans-serif; margin:0; padding:10px; background:#f4f4f4; }
+    #toolbar {
+      margin-bottom:10px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      justify-content:center;
+      align-items: center;
+    }
+    #toolbar button, #toolbar select, #toolbar input, #toolbar label {
+      font-size:14px;
+    }
+    .grid {
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:12px;
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+    .box {
+      background:#fff;
+      border:2px solid #ccc;
+      padding:6px;
+      position: relative;
+    }
+    canvas {
+      border:1px solid #888;
+      width:100%;
+      height:280px;
+    }
+    .box label {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-weight: bold;
+      font-size: 14px;
+      color: #444;
+    }
+    .box-controls {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .box-controls button {
+      flex: 1;
+      margin: 0 2px;
+      padding: 4px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toolbar">
+  <select id="tool">
+    <option value="select">Select/Move</option>
+    <option value="line">Line</option>
+    <option value="arrow">Arrow</option>
+    <option value="doubleArrow">Double Arrow</option>
+    <option value="rect">Rectangle</option>
+    <option value="circle">Circle</option>
+    <option value="triangle">Triangle</option>
+    <option value="semi">Semi-circle</option>
+    <option value="text">Text</option>
+    <option value="delete">Delete</option>
+  </select>
+
+  <label>Stroke Color: <input type="color" id="strokeColor" value="#a52a2a" /></label>
+  <label>Fill Color: <input type="color" id="fillColor" value="#90ee90" /></label>
+  <label>Text Color: <input type="color" id="fontColor" value="#000000" /></label>
+
+  <input type="number" id="strokeWidth" value="2" />
+  <input type="number" id="fontSize" value="16" />
+
+  <select id="strokeStyle">
+    <option value="solid">Solid</option>
+    <option value="dashed">Dashed</option>
+    <option value="dotted">Dotted</option>
+  </select>
+
+  <button id="bringToFront">Bring to Front</button>
+  <button id="sendBackwards">Send Backwards</button>
+  <button id="sendToBack">Send to Back</button>
+  <button id="addBox">Add Box</button>
+</div>
+
+<div class="grid" id="canvasGrid"></div>
+
+<script>
+const history = {}, undoStack = {};
+let currentTool = 'select', boxCount = 0;
+
+function initCanvas(id) {
+  const canvas = new fabric.Canvas(id, {
+    backgroundColor: '#fff',
+    selection: true,
+    preserveObjectStacking: true
+  });
+
+  history[id] = canvas;
+  undoStack[id] = [];
+
+  function recordState() {
+    const json = canvas.toJSON();
+    undoStack[id].push(json);
+  }
+
+  canvas.on('object:added', recordState);
+  canvas.on('object:modified', recordState);
+  canvas.on('object:removed', recordState);
+
+  canvas.on('object:moving', function(e) {
+    const obj = e.target;
+    if (!obj) return;
+    obj.setCoords();
+    const bounds = obj.getBoundingRect(true);
+    if (bounds.left < 0) obj.left = 0;
+    if (bounds.top < 0) obj.top = 0;
+    if (bounds.left + bounds.width > canvas.width)
+      obj.left = canvas.width - bounds.width;
+    if (bounds.top + bounds.height > canvas.height)
+      obj.top = canvas.height - bounds.height;
+  });
+
+  recordState();
+}
+
+function addBox() {
+  boxCount++;
+  const grid = document.getElementById('canvasGrid');
+  const box = document.createElement('div');
+  box.className = 'box';
+  const canvasId = `c${boxCount}`;
+  box.innerHTML = `
+    <label>Box ${boxCount}</label>
+    <canvas id="${canvasId}" width="400" height="280"></canvas>
+    <div class="box-controls">
+      <button onclick="undo('${canvasId}')">Undo</button>
+    </div>`;
+  grid.appendChild(box);
+  initCanvas(canvasId);
+}
+
+function undo(id) {
+  const canvas = history[id];
+  const u = undoStack[id];
+  if (u.length > 1) {
+    u.pop();
+    canvas.loadFromJSON(u[u.length - 1], canvas.renderAll.bind(canvas));
+  }
+}
+
+function addShape(canvas, type) {
+  const stroke = document.getElementById('strokeColor').value;
+  const fill = document.getElementById('fillColor').value;
+  const strokeWidth = +document.getElementById('strokeWidth').value;
+  const fontColor = document.getElementById('fontColor').value;
+  const fontSize = +document.getElementById('fontSize').value;
+  const strokeStyle = document.getElementById('strokeStyle').value;
+  let dash = strokeStyle === 'dotted' ? [2, 5] : strokeStyle === 'dashed' ? [10, 5] : [];
+
+  let obj;
+  const opts = { left: 60, top: 60, stroke, strokeWidth, fill, strokeDashArray: dash };
+
+  switch(type) {
+    case 'line':
+      obj = new fabric.Line([0, 0, 100, 0], opts); break;
+    case 'arrow':
+    case 'doubleArrow':
+      obj = new fabric.Line([0, 0, 100, 0], opts);
+      addArrowhead(obj, type === 'doubleArrow', canvas); return;
+    case 'rect':
+      obj = new fabric.Rect({ ...opts, width: 100, height: 60 }); break;
+    case 'circle':
+      obj = new fabric.Circle({ ...opts, radius: 30 }); break;
+    case 'triangle':
+      obj = new fabric.Triangle({ ...opts, width: 80, height: 80 }); break;
+    case 'semi':
+      obj = new fabric.Path('M 0 0 A 40 40 0 0 1 80 0', opts); break;
+    case 'text':
+      obj = new fabric.Textbox('Text here', {
+        left: 60, top: 60, fontSize, fill: fontColor, width: 120
+      }); break;
+  }
+
+  if (obj) {
+    canvas.add(obj).setActiveObject(obj);
+    canvas.renderAll();
+    document.getElementById('tool').value = 'select';
+    currentTool = 'select';
+  }
+}
+
+function addArrowhead(line, double, canvas) {
+  const arrow1 = new fabric.Triangle({
+    left: line.x2, top: line.y2, originX: 'center', originY: 'center',
+    angle: 90, width: 10, height: 10, fill: line.stroke
+  });
+  const arrows = [line, arrow1];
+  if (double) {
+    const arrow2 = new fabric.Triangle({
+      left: line.x1, top: line.y1, originX: 'center', originY: 'center',
+      angle: 270, width: 10, height: 10, fill: line.stroke
+    });
+    arrows.push(arrow2);
+  }
+  const group = new fabric.Group(arrows, { left: line.left, top: line.top });
+  canvas.add(group);
+  canvas.remove(line);
+}
+
+function getSelectedCanvas() {
+  return Object.values(history).find(c => c.getActiveObject());
+}
+
+function act(fn) {
+  Object.values(history).forEach(canvas => {
+    const obj = canvas.getActiveObject();
+    if (obj) {
+      canvas[fn](obj);
+      canvas.renderAll();
+    }
+  });
+}
+
+document.getElementById('tool').addEventListener('change', e => currentTool = e.target.value);
+document.getElementById('addBox').onclick = () => addBox();
+
+document.getElementById('canvasGrid').addEventListener('mousedown', function (e) {
+  if (currentTool === 'select' || currentTool === 'delete') return;
+  const canvasEl = e.target.closest('div.box')?.querySelector('canvas');
+  if (canvasEl) addShape(history[canvasEl.id], currentTool);
+});
+
+document.getElementById('canvasGrid').addEventListener('mouseup', function () {
+  if (currentTool === 'delete') {
+    Object.values(history).forEach(canvas => {
+      const obj = canvas.getActiveObject();
+      if (obj) {
+        canvas.remove(obj);
+        canvas.renderAll();
+        currentTool = 'select';
+        document.getElementById('tool').value = 'select';
+      }
+    });
+  }
+});
+
+['strokeColor','fillColor','strokeWidth','fontSize','fontColor','strokeStyle'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    const canvas = getSelectedCanvas();
+    const obj = canvas?.getActiveObject();
+    if (!obj) return;
+
+    const stroke = document.getElementById('strokeColor').value;
+    const fill = document.getElementById('fillColor').value;
+    const strokeWidth = +document.getElementById('strokeWidth').value;
+    const fontColor = document.getElementById('fontColor').value;
+    const fontSize = +document.getElementById('fontSize').value;
+    const style = document.getElementById('strokeStyle').value;
+    let dash = style === 'dotted' ? [2,5] : style === 'dashed' ? [10,5] : [];
+
+    if (obj.type === 'textbox') {
+      obj.set({ fill: fontColor, fontSize });
+    } else {
+      obj.set({ stroke, fill, strokeWidth, strokeDashArray: dash });
+    }
+    canvas.requestRenderAll();
+  });
+});
+
+document.getElementById('bringToFront').onclick = () => act('bringToFront');
+document.getElementById('sendBackwards').onclick = () => act('sendBackwards');
+document.getElementById('sendToBack').onclick = () => act('sendToBack');
+
+addBox(); addBox(); addBox(); addBox(); addBox(); addBox(); // 6 initial boxes
+</script>
+</body>
+</html>
