@@ -76,7 +76,31 @@ function sendDrawingToJotForm() {
     }
 }
 
-window.addEventListener("beforeunload", sendDrawingToJotForm);
+<script>
+function sendDrawingToJotForm() {
+    try {
+        const canvas = document.querySelector("canvas");
+        const dataURL = canvas.toDataURL("image/png");
+
+        window.parent.postMessage(
+            {
+                type: "SET_JOTFORM_FIELD",
+                field: "drawingData",
+                value: dataURL
+            },
+            "*"
+        );
+    } catch (e) {
+        console.error("Failed to send drawing data:", e);
+    }
+}
+
+// Call this when the page loads to listen for submission message
+window.addEventListener("message", function(event) {
+    if (event.data && event.data.type === "JOTFORM_SUBMIT") {
+        sendDrawingToJotForm();
+    }
+});
 </script>
 
 <body>
