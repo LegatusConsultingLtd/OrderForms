@@ -55,36 +55,23 @@
       padding: 4px;
       font-size: 13px;
     }
+    #exportBtn {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      z-index: 999;
+    }
   </style>
 </head>
 
 <body>
-
-<script>
-function sendDrawingToJotForm() {
-    try {
-        const canvas = document.querySelector("canvas");
-        const dataURL = canvas.toDataURL("image/png");
-
-        window.parent.postMessage(
-            {
-                type: "SET_JOTFORM_FIELD",
-                field: "drawingData", // Ensure your Jotform short text field has this "Unique Name"
-                value: dataURL
-            },
-            "*"
-        );
-    } catch (e) {
-        console.error("Failed to send drawing data:", e);
-    }
-}
-
-window.addEventListener("message", function(event) {
-    if (event.data && event.data.type === "JOTFORM_SUBMIT") {
-        sendDrawingToJotForm();
-    }
-});
-</script>
 
 <div id="toolbar">
   <select id="tool">
@@ -120,6 +107,7 @@ window.addEventListener("message", function(event) {
 </div>
 
 <div class="grid" id="canvasGrid"></div>
+<button id="exportBtn">📤 Submit Drawing</button>
 
 <script>
 const history = {}, undoStack = {};
@@ -308,9 +296,40 @@ document.getElementById('bringToFront').onclick = () => act('bringToFront');
 document.getElementById('sendBackwards').onclick = () => act('sendBackwards');
 document.getElementById('sendToBack').onclick = () => act('sendToBack');
 
-// Add default boxes
-addBox(); addBox(); addBox(); addBox(); addBox(); addBox();
+// Export Drawing to JotForm File Upload Field
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const canvases = Array.from(document.querySelectorAll('canvas'));
+  const cols = 3, padding = 10;
+  const w = canvases[0].width, h = canvases[0].height;
+  const out = document.createElement('canvas');
+  out.width = cols * w + padding * (cols + 1);
+  out.height = Math.ceil(canvases.length / cols) * h + padding * (Math.ceil(canvases.length / cols) + 1);
+  const ctx = out.getContext('2d');
+
+  canvases.forEach((c, i) => {
+    const x = padding + (i % cols) * (w + padding);
+    const y = padding + Math.floor(i / cols) * (h + padding);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x, y, w, h);
+    ctx.drawImage(c, x, y, w, h);
+  });
+
+  const dataURL = out.toDataURL('image/png');
+  window.parent.postMessage({
+    type: 'SET_FILE_UPLOAD',
+    field: 'drawingUpload',
+    data: dataURL
+  }, '*');
+
+  alert("Drawing submitted and embedded in the form!");
+});
+
+// Initial boxes
+for (let i = 0; i < 6; i++) addBox();
 </script>
+
 </body>
 </html>
+
+
 
