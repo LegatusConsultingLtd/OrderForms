@@ -3,39 +3,60 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Final Drawing Tool</title>
+  <title>Drawing Tool</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.2.4/fabric.min.js"></script>
   <style>
-    body { font-family:sans-serif; margin:0; padding:10px; background:#f4f4f4; }
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 10px;
+      background: #f4f4f4;
+    }
+
     #toolbar {
-      margin-bottom:10px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-      justify-content:center;
+      margin-bottom: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
       align-items: center;
+      justify-content: flex-start;
     }
+
     #toolbar button, #toolbar select, #toolbar input, #toolbar label {
-      font-size:14px;
+      font-size: 14px;
     }
+
+    .submit-button {
+      background-color: #007bff;
+      color: white;
+      padding: 6px 14px;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
     .grid {
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:12px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
       max-width: 1300px;
       margin: 0 auto;
     }
+
     .box {
-      background:#fff;
-      border:2px solid #ccc;
-      padding:6px;
+      background: #fff;
+      border: 2px solid #ccc;
+      padding: 6px;
       position: relative;
     }
+
     canvas {
-      border:1px solid #888;
-      width:100%;
-      height:280px;
+      border: 1px solid #888;
+      width: 100%;
+      height: 280px;
     }
+
     .box label {
       position: absolute;
       top: 4px;
@@ -44,33 +65,21 @@
       font-size: 14px;
       color: #444;
     }
+
     .box-controls {
       display: flex;
       justify-content: space-between;
       margin-top: 4px;
     }
+
     .box-controls button {
       flex: 1;
       margin: 0 2px;
       padding: 4px;
       font-size: 13px;
     }
-    #exportBtn {
-      position: fixed;
-      bottom: 16px;
-      right: 16px;
-      padding: 10px 20px;
-      background: #007bff;
-      color: white;
-      border: none;
-      font-size: 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      z-index: 999;
-    }
   </style>
 </head>
-
 <body>
 
 <div id="toolbar">
@@ -90,7 +99,6 @@
   <label>Stroke Color: <input type="color" id="strokeColor" value="#a52a2a" /></label>
   <label>Fill Color: <input type="color" id="fillColor" value="#90ee90" /></label>
   <label>Text Color: <input type="color" id="fontColor" value="#000000" /></label>
-
   <input type="number" id="strokeWidth" value="2" />
   <input type="number" id="fontSize" value="16" />
 
@@ -104,10 +112,11 @@
   <button id="sendBackwards">Send Backwards</button>
   <button id="sendToBack">Send to Back</button>
   <button id="addBox">Add Box</button>
+
+  <button id="submitBtn" class="submit-button">🖼️ Submit Drawing</button>
 </div>
 
 <div class="grid" id="canvasGrid"></div>
-<button id="exportBtn">📤 Submit Drawing</button>
 
 <script>
 const history = {}, undoStack = {};
@@ -246,6 +255,30 @@ function act(fn) {
   });
 }
 
+function mergeCanvasesAndDownload() {
+  const canvases = Array.from(document.querySelectorAll("canvas"));
+  const totalWidth = 1200;
+  const rowHeight = 280;
+  const rows = Math.ceil(canvases.length / 3);
+  const finalCanvas = document.createElement("canvas");
+  finalCanvas.width = totalWidth;
+  finalCanvas.height = rows * rowHeight;
+  const ctx = finalCanvas.getContext("2d");
+
+  canvases.forEach((canvas, i) => {
+    const x = (i % 3) * 400;
+    const y = Math.floor(i / 3) * rowHeight;
+    ctx.drawImage(canvas, x, y);
+  });
+
+  const dataURL = finalCanvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = dataURL;
+  a.download = "drawing.png";
+  a.click();
+}
+
+document.getElementById('submitBtn').onclick = mergeCanvasesAndDownload;
 document.getElementById('tool').addEventListener('change', e => currentTool = e.target.value);
 document.getElementById('addBox').onclick = () => addBox();
 
@@ -296,38 +329,9 @@ document.getElementById('bringToFront').onclick = () => act('bringToFront');
 document.getElementById('sendBackwards').onclick = () => act('sendBackwards');
 document.getElementById('sendToBack').onclick = () => act('sendToBack');
 
-// Export Drawing to JotForm File Upload Field
-document.getElementById('exportBtn').addEventListener('click', () => {
-  const canvases = Array.from(document.querySelectorAll('canvas'));
-  const cols = 3, padding = 10;
-  const w = canvases[0].width, h = canvases[0].height;
-  const out = document.createElement('canvas');
-  out.width = cols * w + padding * (cols + 1);
-  out.height = Math.ceil(canvases.length / cols) * h + padding * (Math.ceil(canvases.length / cols) + 1);
-  const ctx = out.getContext('2d');
-
-  canvases.forEach((c, i) => {
-    const x = padding + (i % cols) * (w + padding);
-    const y = padding + Math.floor(i / cols) * (h + padding);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(x, y, w, h);
-    ctx.drawImage(c, x, y, w, h);
-  });
-
-  const dataURL = out.toDataURL('image/png');
-  window.parent.postMessage({
-    type: 'SET_FILE_UPLOAD',
-    field: 'drawingUpload',
-    data: dataURL
-  }, '*');
-
-  alert("Drawing submitted and embedded in the form!");
-});
-
-// Initial boxes
-for (let i = 0; i < 6; i++) addBox();
+// Add 6 default boxes
+addBox(); addBox(); addBox(); addBox(); addBox(); addBox();
 </script>
-
 </body>
 </html>
 
